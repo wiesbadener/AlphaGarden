@@ -21,7 +21,7 @@ import multiprocessing as mp
 import time
 from simulator.garden import Garden
 
-def wrapperPolicy(env, row, col, timestep, state, global_cc_vec, sector_rows, sector_cols, prune_window_rows,
+def wrapperPolicy(div_cov_arr, env, row, col, timestep, state, global_cc_vec, sector_rows, sector_cols, prune_window_rows,
            prune_window_cols, step, water_threshold, num_irr_actions, sector_obs_per_day, garden_state,
            vectorized=True, val=False):
     """ Perform baseline policy with pruning and irrigation action.
@@ -50,8 +50,8 @@ def wrapperPolicy(env, row, col, timestep, state, global_cc_vec, sector_rows, se
     prune_rates = [0.05, 0.1, 0.16, 0.2, 0.3, 0.4] # prune rates for the adaptive policies
     div_cov_metrics = [] # metrics for diversity-coverage for each prune rate
     day = timestep // sector_obs_per_day
-    sectors_center = [] # sectors for 
-    sectors_state = []
+    sectors_center = [] # sector coordinates
+    sectors_state = [] # sector state, array of other grids
   
     # each day process 
 
@@ -64,7 +64,7 @@ def wrapperPolicy(env, row, col, timestep, state, global_cc_vec, sector_rows, se
         actions = [] # actions for each prune rate for each day
         cc_vec = env.get_global_cc_vec() #calling the adaptive policy with the specific prune rate for each timestep
         for j in range(sector_obs_per_day): # for each sector_obs_per_day
-            if i == 0:
+            if i == 0:  #reusing the sectors
                 rand_sector = garden_to_sector(garden_copy, plant_centers, non_plant_centers, row, col, step)
                 sectors_state.append(rand_sector)
                 sectors_center.append(rand_sector[0])
@@ -79,8 +79,12 @@ def wrapperPolicy(env, row, col, timestep, state, global_cc_vec, sector_rows, se
         div = garden_copy.diversity
         div_cov = cov[-1] * div[-1]
         div_cov_metrics.append(div_cov)
+    temp2 = ["Day " + str(day + 1)] + div_cov_metrics # creating array to print out the div-cov values
     metrics = np.array(div_cov_metrics) #change to np array
-    best_pr = prune_rates[np.argmax(metrics)] #find the best policy and its corresponding set of actions
+    best_pr = prune_rates[np.argmax(metrics)] #find the best policy and its corresponding prune rate
+    temp2 = temp2 + ["Pr: " + str(best_pr)]
+    div_cov_arr.append(temp2) # array which prints the div-cov for each prune rate
+
     return best_pr
 
 def copy_garden(garden_state, rows, cols, sector_row, sector_col, prune_win_rows, prune_win_cols, step, prune_rate):
@@ -100,8 +104,7 @@ def copy_garden(garden_state, rows, cols, sector_row, sector_col, prune_win_rows
 
 def garden_to_sector(garden, plant_centers, non_plant_centers, rows, cols, step):
 
-    #if len(actions_to_execute) <= PlantType.plant_in_bounds and len(plant_centers) > 0:
-    if(np.random.randint(0, 1) == 1):
+    if(np.random.rand(1)[0] > PERCENT_NON_PLANT_CENTERS):
         np.random.shuffle(plant_centers)
         center_to_sample = plant_centers[0]
         plant_centers = plant_centers[1:]
